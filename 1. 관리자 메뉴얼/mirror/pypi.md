@@ -18,12 +18,13 @@
 ## 2. Bandersnatch 설치 및 기본 설정
 
 ### 2.0 특정 버전 특정하기 위해 확인할 점(2025-02-26 기준)
+
 1. tensorflow 지원 버전 확인 [링크](https://www.tensorflow.org/install/source?hl=ko#gpu)
   - tensorflow 2.17.0 기준 파이썬 3.9 ~ 3.12, cuda12.3
   - tensorflow 2.0.0 기준 파이썬 3.3 ~ 3.7, cuda10.0
+
 2. pytorch 버전 확인 [링크](https://pytorch.org/get-started/locally/)
   - 2025-02-26 기준 CUDA: 12.6 지원
-
 
 ### 2.1 Bandersnatch 설치
 
@@ -64,6 +65,7 @@ pip install bandersnatch
 ```
 
 ### 2.3 설정 파일 수정
+
 Bandersnatch의 기본 설정 파일을 편집하여 미러링 경로와 기타 옵션을 구성합니다.
 
 
@@ -72,6 +74,7 @@ sudo vim /etc/bandersnatch.conf
 ```
 
 `/etc/bandersnatch.conf` 파일
+
 ```ini
 [mirror]
 directory = /data/pypi
@@ -109,9 +112,11 @@ platforms =
 [latest_release]
 keep = 20
 ```
+
 ---
 
 ## 2.3 미러링 수행
+
 설정이 완료되면, 아래 명령어로 PyPI 미러링을 시작합니다.
 
 ```bash
@@ -123,21 +128,27 @@ bandersnatch mirror
 ```
 
 ## 3. Nginx 설정
+
 미러링이 완료된 후, PyPI 미러 서버를 웹 서버(Nginx 또는 Apache)를 통해 서비스할 수 있습니다.
 
 ### 3.1 Nginx 설치
+
 먼저 Nginx가 설치되어 있지 않다면, 아래 명령어로 설치합니다.
+
 ```bash
 sudo apt-get update
 sudo apt-get install nginx
 ```
+
 DNS 포트 열기 
+
 ```bash
 sudo ufw allow 53 comment 'DNS'
 sudo ufw reload
 ```
 
 ### 3.2 Nginx 설정 파일 구성
+
 Nginx 설정 파일을 편집하여 PyPI 미러 서버의 정적 파일이 위치한 `/data/pypi` 디렉터리를 서비스하도록 설정합니다.
 <br><br>
 보통 사이트 별 설정은 `/etc/nginx/sites-available/` 디렉터리에 생성하고, `/etc/nginx/sites-enabled/`에 심볼릭 링크를 생성하여 활성화합니다.
@@ -191,7 +202,9 @@ server {
     access_log /var/log/nginx/pypi_access.log;
 }
 ```
+
 간단버전 현재 적용
+
 ```conf
 server {
     listen 80;
@@ -210,37 +223,50 @@ server {
     access_log /var/log/nginx/pypi_access.log;
 }
 ```
+
 ### 3.3 설정 활성화
 
 생성한 설정 파일을 활성화시키기 위해 심볼릭 링크 생성
+
 ```bash
 sudo ln -s /etc/nginx/sites-available/pypi /etc/nginx/sites-enabled/
 ```
+
 설정 파일에 오류가 없는지 확인합니다.
+
 ```bash
 sudo nginx -t
 ```
+
 오류가 없으면 아래 명령어로 Nginx를 다시 시작하여 적용합니다.
+
 ```bash
 sudo systemctl restart nginx
 ```
+
 ---
+
 ## 4. Bind 설정
 
 ### 4.1 Bind 설치
-```
+
+```bash
 sudo apt update
 sudo apt install bind9 bind9utils bind9-doc
 ```
+
 ### 4.2. `/etc/bind/named.conf.local` 설정 추가
+
 ```conf
 zone "smc.com" {
     type master;
     file "/etc/bind/db.smc.com";
 };
+
 ```
 
 ### 4.3. Zone 파일 생성 `/etc/bind/db.smc.com`  
+
 ```dns
 $TTL    604800
 @       IN      SOA     ns.smc.com. admin.smc.com. (
@@ -256,10 +282,13 @@ pypi    IN      A       192.168.1.101
 llm     IN      A       192.168.1.120
 
 ```
+
 ---
+
 ## 5. 각 [Client] 설정(도커이미지에서)
 
 ### 5.1 pip.conf 생성
+
 1. 리눅스: `~/.pip/pip.conf`
 2. Windows: `%APPDATA%\pip\pip.ini`
 
@@ -273,34 +302,43 @@ vim ~/.pip/pip.conf
 index-url = http://pypi.smc.com/simple
 trusted-host = pypi.smc.com
 ```
-### 5.2 hosts 설정
-1. 리눅스: `/etc/hosts`파일에 `<PyPI서버 주소>    <DNS>` 추가
-```bash
-127.0.0.1 localhost
-127.0.1.1 ubuntu
-119.86.100.149    pypi.smc.com <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<추가
 
-# The following lines are desirable for IPv6 capable hosts
-::1     ip6-localhost ip6-loopback
-fe00::0 ip6-localnet
-ff00::0 ip6-mcastprefix
-ff02::1 ip6-allnodes
-ff02::2 ip6-allrouters
-```
+### 5.2 hosts 설정
+
+1. 리눅스: `/etc/hosts`파일에 `<PyPI서버 주소>    <DNS>` 추가
+
+    ```bash
+    127.0.0.1 localhost
+    127.0.1.1 ubuntu
+    119.86.100.149    pypi.smc.com <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<추가
+
+    # The following lines are desirable for IPv6 capable hosts
+    ::1     ip6-localhost ip6-loopback
+    fe00::0 ip6-localnet
+    ff00::0 ip6-mcastprefix
+    ff02::1 ip6-allnodes
+    ff02::2 ip6-allrouters
+    ```
+
 2. 윈도우: `C:\Windows\System32\drivers\etc\hosts`파일에 추가 
-```bash
-[사내 PyPI 서버 IP]   pypi.smc.com
-```
+
+    ```bash
+    [사내 PyPI 서버 IP]   pypi.smc.com
+    ```
+
 ## 6. 스토리지 서버 --> SSD 세팅
+
 NFS 구성 후 마운트하여 작업하는 것이 안정적으로 보임.
+
 ### NFS 서버 (스토리지 서버, 10.201.225.2)
+
 ```bash
 sudo apt update
 sudo apt install -y nfs-kernel-server
 sudo vim /etc/exports
 ```
 
-```
+```bash
 /data/pypi/web/packages  10.201.225.0/24(rw,sync,no_subtree_check)
 ```
 
@@ -311,6 +349,7 @@ sudo ufw allow from 10.201.225.0/24 to any port nfs
 ```
 
 ### NFS 클라이언트 (SSD 연결한 서버, 10.201.225.166)
+
 ```bash
 sudo apt update
 sudo apt install -y nfs-common
@@ -326,8 +365,10 @@ sudo mount -o remount,rw /ssd/pypi
 ```
 
 ### 대망의 실행
+
 `nohup rsync -aW --info=progress2 /mnt/nas/ /ssd/pypi/web/packages/ > ~/rsync.log 2>&1 &`
 
 ## 7. SSD -->  내부망 서버
+
 ... 어떤 어려움이 기다리고 있을까??
 winSCP
