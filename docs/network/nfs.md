@@ -9,7 +9,7 @@
 
 ## 1.1 NFS 서버 설치
 
-```bash
+````bash
 sudo apt update
 sudo apt install -y nfs-kernel-server
 
@@ -21,7 +21,7 @@ sudo apt install -y nfs-kernel-server
 sudo mkdir -p /data/mimic3
 sudo chown -R nobody:nogroup /data/mimic3
 sudo chmod 777 /data/mimic3
-```
+````
 
 ---
 
@@ -141,7 +141,7 @@ sudo mount -t nfs 172.30.1.118:/data/mimic3 /data/mimic_nfs
 재부팅 시 자동으로 마운트되도록 `/etc/fstab`에 추가합니다.
 
 ```bash
-sudo nano /etc/fstab
+sudo vim /etc/fstab
 ```
 
 아래 내용을 추가합니다.
@@ -187,4 +187,3 @@ touch /data/mimic_nfs/test.txt
 서버에서 `/data/mimic3/test.txt` 파일이 생성되면 정상적으로 연결된 것입니다.
 
 ---
-
