@@ -91,8 +91,9 @@ RUN pip install --upgrade pip && \
 # 작업 디렉토리 설정
 WORKDIR /home/jupyter
 
-# 컨테이너 시작 시 Jupyter Lab을 실행하도록 설정
-CMD ["jupyter", "lab", "--ip=0.0.0.0", "--allow-root", "--no-browser"]
+COPY jupyter_lab_config.py /home/jupyter/jupyter_lab_config.py
+
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--allow-root", "--no-browser", "--config=/home/jupyter/jupyter_lab_config.py"]
 ```
 
 - Docker image
@@ -100,7 +101,7 @@ CMD ["jupyter", "lab", "--ip=0.0.0.0", "--allow-root", "--no-browser"]
 `sudo docker build <옵션> <Dockerfile 경로>`
 
 ```bash
-sudo docker build --tag jupyter:1.0 .
+sudo docker build --tag jupyter:1.1 .
 ```
 
 ---
