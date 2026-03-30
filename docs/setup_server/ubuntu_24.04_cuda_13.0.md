@@ -132,7 +132,7 @@ for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker c
 ```bash
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
-sudo mkdir -p /workspace/8888 /workspace/8889
+sudo mkdir -p /workspace/8888/conda /workspace/8888/home /workspace/8889/conda /workspace/8889/home
 sudo chown -R $USER:$USER /workspace
 ```
 

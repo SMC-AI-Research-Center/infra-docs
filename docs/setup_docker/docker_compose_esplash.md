@@ -1,4 +1,5 @@
 # Docker in Server
+
 1. *Docker Image/Container*
 1. **Docker Compose**
 1. *Docker Swarm*
@@ -26,10 +27,9 @@ AVAILABLE_CORES=$(($TOTAL_CORES - $RESERVED_CORES))
 HALF_CORES=$(($AVAILABLE_CORES / 2))
 
 TOTAL_MEM=$(free -m | awk '/Mem:/ {print $2}')
-# 전체 메모리의 25% 예약
-RESERVED_MEM=$(($TOTAL_MEM / 4))
+RESERVED_MEM=8192 
 AVAILABLE_MEM=$(($TOTAL_MEM - $RESERVED_MEM))
-HALF_MEM=$(($AVAILABLE_MEM / 2))
+HALF_MEM=$(($AVAILABLE_MEM / 2 / 1024))
 
 ####################
 # GPU 설정
@@ -38,7 +38,7 @@ TOTAL_GPUS=$(nvidia-smi -L | wc -l)
 HALF_GPUS=$(($TOTAL_GPUS / 2))
 
 echo "Total CPU: $TOTAL_CORES, AVAILABLE_CORES: $AVAILABLE_CORES, Half CPU: $HALF_CORES"
-echo "Total Memory: ${TOTAL_MEM}MB, AVAILABLE_Memory: ${AVAILABLE_MEM}MB, Half Memory: ${HALF_MEM}MB"
+echo "Total Memory: ${TOTAL_MEM}MB, AVAILABLE_Memory: ${AVAILABLE_MEM}MB, Half Memory: ${HALF_MEM}GB"
 echo "Total GPUs: $TOTAL_GPUS, Half GPUs: $HALF_GPUS"
 
 if [ "$TOTAL_GPUS" -eq 0 ]; then
@@ -50,7 +50,7 @@ elif [ "$TOTAL_GPUS" -eq 1 ]; then
     cat <<EOF > docker-compose.yml
 services:
   jupyter-8888:
-    image: jupyter:1.0
+    image: jupyter_es:1.0
     shm_size: 16g
     ports:
       - "8888:8888"
@@ -66,7 +66,7 @@ services:
       resources:
         limits:
           cpus: "${HALF_CORES}"
-          memory: "${HALF_MEM}m"
+          memory: "${HALF_MEM}g"
         reservations:
           devices:
           - driver: nvidia
@@ -82,68 +82,68 @@ else
     GPU_CONTAINER2=$(seq -s, $HALF_GPUS $(($TOTAL_GPUS - 1)))
 
     cat <<EOF > docker-compose.yml
+x-jupyter-base: &jupyter-base
+  image: jupyter_es:1.0
+  shm_size: 8g
+  deploy:
+    resources:
+      limits:
+        cpus: "${HALF_CORES}"
+        memory: "${HALF_MEM}g"
+    placement:
+      constraints:
+        - node.labels.gpu == true
 services:
   jupyter-8888:
-    image: jupyter:1.0
-    shm_size: 16g
+    <<: *jupyter-base
+    container_name: jupyter-8888
+    env_file:
+      - .env
     ports:
       - 8888:8888
     environment:
-      - JUPYTER_PASSWORD=firstPasswd123
+      - JUPYTER_PASSWORD=\${PW_8888}
       - NVIDIA_VISIBLE_DEVICES=${GPU_CONTAINER1}
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    command: jupyter lab
     volumes:
-      - /workspace/8888:/home/jupyter
-      - ./jupyter_lab_config.py:/etc/jupyter/jupyter_lab_config.py:ro
+      - /workspace/8888/home:/home/jupyter
+      - /workspace/8888/conda:/opt/conda
     deploy:
       resources:
-        limits:
-          cpus: "${HALF_CORES}"
-          memory: "${HALF_MEM}m"
         reservations:
           devices:
-          - driver: nvidia
-            device_ids: [$(echo $GPU_CONTAINER1 | tr ',' ' ' | sed 's/ /", "/g' | sed 's/^/"/;s/$/"/')]
-            capabilities: [gpu]
-      placement:
-        constraints:
-          - node.labels.gpu == true
+            - driver: nvidia
+              device_ids: [$(echo $GPU_CONTAINER1 | tr ',' ' ' | sed 's/ /", "/g' | sed 's/^/"/;s/$/"/')]
+              capabilities: [gpu]
   jupyter-8889:
-    image: jupyter:1.0
-    shm_size: 16g
+    <<: *jupyter-base
+    container_name: jupyter-8889
+    env_file:
+      - .env
     ports:
-      - "8889:8888"
+      - 8889:8888
     environment:
-      - JUPYTER_PASSWORD=secondPasswd456
+      - JUPYTER_PASSWORD=\${PW_8889}
       - NVIDIA_VISIBLE_DEVICES=${GPU_CONTAINER2}
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    command: jupyter lab
     volumes:
-      - /workspace/8889:/home/jupyter
-      - ./jupyter_lab_config.py:/etc/jupyter/jupyter_lab_config.py:ro
+      - /workspace/8889/home:/home/jupyter
+      - /workspace/8889/conda:/opt/conda
     deploy:
       resources:
-        limits:
-          cpus: "${HALF_CORES}"
-          memory: "${HALF_MEM}m"
         reservations:
           devices:
-          - driver: nvidia
-            device_ids: [$(echo $GPU_CONTAINER2 | tr ',' ' ' | sed 's/ /", "/g' | sed 's/^/"/;s/$/"/')]
-            capabilities: [gpu]
-      placement:
-        constraints:
-          - node.labels.gpu == true
+            - driver: nvidia
+              device_ids: [$(echo $GPU_CONTAINER2 | tr ',' ' ' | sed 's/ /", "/g' | sed 's/^/"/;s/$/"/')]
+              capabilities: [gpu]
 EOF
 fi
 
 echo "docker-compose.yml 파일이 생성되었습니다."
-
 ```
+
 - docker-compose.yml 생성
   - `bash make_docker_compose.sh`
 - docker-compose 실행
+
 ```bash
-sudo docker compose up
+sudo docker compose up -d
 ```
