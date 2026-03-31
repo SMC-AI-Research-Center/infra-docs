@@ -109,7 +109,7 @@ sudo apt-get install -y nvidia-container-toolkit
 ```bash
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
-sudo /workspace/8888/conda /workspace/8888/home /workspace/8889/conda /workspace/8889/home
+sudo mkdir -p /workspace/8888/conda /workspace/8888/home /workspace/8889/conda /workspace/8889/home
 sudo chown -R $USER:$USER /workspace
 ```
 

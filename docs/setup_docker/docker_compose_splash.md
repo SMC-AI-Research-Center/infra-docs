@@ -50,7 +50,7 @@ elif [ "$TOTAL_GPUS" -eq 1 ]; then
     cat <<EOF > docker-compose.yml
 services:
   jupyter-8888:
-    image: jupyter_es:1.0
+    image: jupyter_s:1.0
     extra_hosts:
       - "pypi.smc.com:119.86.100.149"
     shm_size: 16g
@@ -85,7 +85,7 @@ else
 
     cat <<EOF > docker-compose.yml
 x-jupyter-base: &jupyter-base
-  image: jupyter_es:1.0
+  image: jupyter_s:1.0
   extra_hosts:
     - "pypi.smc.com:119.86.100.149"
   shm_size: 8g
@@ -111,6 +111,8 @@ services:
     volumes:
       - /workspace/8888/home:/home/jupyter
       - /workspace/8888/conda:/opt/conda
+      - /data/8888:/home/jupyter/extra_data
+      - ./jupyter_lab_config.py:/etc/jupyter_lab_config.py:ro
     deploy:
       resources:
         reservations:
@@ -131,6 +133,8 @@ services:
     volumes:
       - /workspace/8889/home:/home/jupyter
       - /workspace/8889/conda:/opt/conda
+      - /data/8889:/home/jupyter/extra_data
+      - ./jupyter_lab_config.py:/etc/jupyter_lab_config.py:ro
     deploy:
       resources:
         reservations:

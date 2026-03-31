@@ -51,7 +51,7 @@ RUN conda install -y -c conda-forge jupyterlab nb_conda_kernels && \
 WORKDIR /home/jupyter
 
 RUN echo "[global]\nindex-url = http://pypi.smc.com/simple\ntrusted-host = pypi.smc.com" > /etc/pip.conf
-COPY jupyter_lab_config.py /home/jupyter/jupyter_lab_config.py
+COPY jupyter_lab_config.py /etc/jupyter/jupyter_lab_config.py
 
 # Bash를 실행하고, 환경 설정을 불러온 뒤 주피터를 실행하도록 강제함
 CMD ["/opt/conda/bin/jupyter", "lab", "--ip=0.0.0.0", "--allow-root", "--no-browser", "--config=/etc/jupyter/jupyter_lab_config.py"]
