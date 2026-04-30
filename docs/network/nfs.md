@@ -9,9 +9,10 @@
 
 ## 1.1 NFS 서버 설치
 
-````bash
+```bash
 sudo apt update
 sudo apt install -y nfs-kernel-server
+```
 
 ---
 
@@ -19,9 +20,7 @@ sudo apt install -y nfs-kernel-server
 
 ```bash
 sudo mkdir -p /data/mimic3
-sudo chown -R nobody:nogroup /data/mimic3
-sudo chmod 777 /data/mimic3
-````
+```
 
 ---
 
@@ -30,13 +29,14 @@ sudo chmod 777 /data/mimic3
 NFS로 공유할 디렉토리를 `/etc/exports`에 등록합니다.
 
 ```bash
-sudo nano /etc/exports
+sudo vim /etc/exports
 ```
 
 아래 내용을 추가합니다.
 
 ```bash
-/data/mimic3 172.30.1.0/24(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,no_root_squash,no_all_squash)
+# /data/mimic3 172.30.1.0/24(sync,wdelay,hide,no_subtree_check,sec=sys,rw,secure,no_root_squash,no_all_squash)
+/data/mimic3 172.30.1.0/24(rw, sync, no_root_squash)
 ```
 
 설정 적용
@@ -76,7 +76,7 @@ sudo ufw status
 mountd 포트를 고정하면 방화벽 관리가 쉬워집니다.
 
 ```bash
-sudo nano /etc/nfs.conf
+sudo vim /etc/nfs.conf
 ```
 
 아래 내용을 추가하거나 수정합니다.

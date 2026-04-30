@@ -22,10 +22,10 @@
 1. tensorflow 지원 버전 확인 [링크](https://www.tensorflow.org/install/source?hl=ko#gpu)
   - tensorflow 2.17.0 기준 파이썬 3.9 ~ 3.12, cuda12.3
   - tensorflow 2.0.0 기준 파이썬 3.3 ~ 3.7, cuda10.0
-
+  
 2. pytorch 버전 확인 [링크](https://pytorch.org/get-started/locally/)
-  - 2025-02-26 기준 CUDA: 12.6 지원
-
+  - 2026-04-16 기준 CUDA: 12.8 지원
+  
 ### 2.1 Bandersnatch 설치
 
 아래 명령어를 통해 Bandersnatch를 설치합니다.
@@ -53,7 +53,7 @@ pip install bandersnatch
     ...
 
     ...
-    # etc 조건 추가: x86_64만 다운로드 하도록록
+    # etc 조건 추가: x86_64 및 none 이외 플랫폼은 제외
             elif lplatform in "etc":
                 self._patterns.extend([lplatform])
                 self._patterns.extend(["macosx_", "macosx-"])
@@ -64,10 +64,12 @@ pip install bandersnatch
     ...
 ```
 
+위 수정 기준에서는 Linux x86_64와 pure-python wheel(예: `py3-none-any`)만 남고,
+arm/aarch64/i686/ppc64/s390 및 macOS/Windows 계열 바이너리는 제외된다.
+
 ### 2.3 설정 파일 수정
 
 Bandersnatch의 기본 설정 파일을 편집하여 미러링 경로와 기타 옵션을 구성합니다.
-
 
 ```bash
 sudo vim /etc/bandersnatch.conf
@@ -108,10 +110,15 @@ platforms =
     py3.5
     py3.6
     py3.7
+    py3.8
 
 [latest_release]
 keep = 20
 ```
+
+운영 기준:
+- `platforms = etc`는 2.2에서 수정한 커스텀 필터를 사용해 x86_64와 none만 허용하도록 동작한다.
+- 따라서 별도 아키텍처 allowlist를 추가하지 않아도 목적( x86_64 + none )을 만족한다.
 
 ---
 

@@ -97,6 +97,14 @@ RUN set -x && \
 RUN conda install -y -c conda-forge jupyterlab nb_conda_kernels && \
     conda clean -afy
 
+# 폐쇄망에서 conda create 불가하므로 빌드 시 미리 환경 생성
+# nb_conda_kernels가 자동으로 Jupyter 커널로 인식함
+RUN conda create -y -n py39 python=3.9 ipykernel && \
+    conda create -y -n py310 python=3.10 ipykernel && \
+    conda create -y -n py312 python=3.12 ipykernel && \
+    conda create -y -n py313 python=3.13 ipykernel && \
+    conda clean -afy
+
 WORKDIR /home/jupyter
 
 RUN echo "[global]\nindex-url = http://pypi.smc.com/simple\ntrusted-host = pypi.smc.com" > /etc/pip.conf
@@ -111,7 +119,7 @@ CMD ["/opt/conda/bin/jupyter", "lab", "--ip=0.0.0.0", "--allow-root", "--no-brow
 `sudo docker build <옵션> <Dockerfile 경로>`
 
 ```bash
-sudo docker build --tag jupyter_s:1.0 .
+sudo docker build --tag jupyter_s:1.1 .
 ```
 
 ---
