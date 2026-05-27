@@ -60,7 +60,8 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     command: jupyter lab
     volumes:
-      - /workspace/8888:/home/jupyter
+      - /workspace/8888/home:/home/jupyter
+      - /workspace/8888/conda:/opt/conda
       - ./jupyter_lab_config.py:/etc/jupyter/jupyter_lab_config.py:ro
     deploy:
       resources:
@@ -107,6 +108,7 @@ services:
     volumes:
       - /workspace/8888/home:/home/jupyter
       - /workspace/8888/conda:/opt/conda
+      - ./jupyter_lab_config.py:/etc/jupyter/jupyter_lab_config.py:ro
     deploy:
       resources:
         reservations:
