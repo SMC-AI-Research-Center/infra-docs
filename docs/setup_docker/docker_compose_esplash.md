@@ -107,7 +107,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${GPU_CONTAINER1}
     volumes:
       - /workspace/8888/home:/home/jupyter
-      - /workspace/8888/conda:/opt/conda
+      - jupyter_conda_8888:/opt/conda
       - ./jupyter_lab_config.py:/etc/jupyter/jupyter_lab_config.py:ro
     deploy:
       resources:
@@ -128,7 +128,8 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${GPU_CONTAINER2}
     volumes:
       - /workspace/8889/home:/home/jupyter
-      - /workspace/8889/conda:/opt/conda
+      - jupyter_conda_8889:/opt/conda
+      - ./jupyter_lab_config.py:/etc/jupyter/jupyter_lab_config.py:ro
     deploy:
       resources:
         reservations:
@@ -136,6 +137,19 @@ services:
             - driver: nvidia
               device_ids: [$(echo $GPU_CONTAINER2 | tr ',' ' ' | sed 's/ /", "/g' | sed 's/^/"/;s/$/"/')]
               capabilities: [gpu]
+volumes:
+  jupyter_conda_8888:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/workspace/8888/conda'
+  jupyter_conda_8889:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: '/workspace/8889/conda'
 EOF
 fi
 

@@ -72,8 +72,8 @@ sudo chmod -R 755 /data/mirror
 
 ```bash
 # 백그라운드 실행 (로그 확인 가능)
-sudo nohup apt-mirror > /data/mirror/var/mirror.log 2>&1 &
-
+# sudo nohup apt-mirror > /data/mirror/var/mirror.log 2>&1 &
+sudo sh -c 'nohup apt-mirror > /data/mirror/var/mirror.log 2>&1 &'
 # 진행 상황 모니터링
 tail -f /data/mirror/var/mirror.log
 ```
