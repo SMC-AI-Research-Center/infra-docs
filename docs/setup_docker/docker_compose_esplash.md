@@ -62,6 +62,7 @@ services:
     volumes:
       - /workspace/8888/home:/home/jupyter
       - /workspace/8888/conda:/opt/conda
+      - /data/8888:/home/jupyter/data_extra
       - ./jupyter_lab_config.py:/etc/jupyter/jupyter_lab_config.py:ro
     deploy:
       resources:
@@ -107,6 +108,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${GPU_CONTAINER1}
     volumes:
       - /workspace/8888/home:/home/jupyter
+      - /data/8888:/home/jupyter/data_extra
       - jupyter_conda_8888:/opt/conda
       - ./jupyter_lab_config.py:/etc/jupyter/jupyter_lab_config.py:ro
     deploy:
@@ -128,6 +130,7 @@ services:
       - NVIDIA_VISIBLE_DEVICES=${GPU_CONTAINER2}
     volumes:
       - /workspace/8889/home:/home/jupyter
+      - /data/8889:/home/jupyter/data_extra
       - jupyter_conda_8889:/opt/conda
       - ./jupyter_lab_config.py:/etc/jupyter/jupyter_lab_config.py:ro
     deploy:
