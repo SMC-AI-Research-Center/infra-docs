@@ -1,229 +1,440 @@
-# PyPI 미러 운영 업데이트 기획서 (폐쇄망)
+# PyPI 미러 증분 업데이트 운영 기획서 (폐쇄망)
 
 ## 1. 목적
 
-- 다운로드 서버(172.30.1.118)에서 PyPI 미러를 최신 상태로 유지한다.
-- 폐쇄망 서비스 서버(119.86.100.149)에 안정적으로 배포하여 내부 사용자 pip 설치 실패를 최소화한다.
-- 정기/긴급 업데이트 기준과 운영 절차(SOP)를 표준화한다.
+* 다운로드 서버 `172.30.1.118`에서 PyPI 미러를 최신 상태로 유지한다.
+* 전체 PyPI 미러를 매번 복사하지 않고, Bandersnatch 동기화 과정에서 신규 생성되거나 변경된 파일만 차분 배포본으로 생성한다.
+* 차분 배포본을 USB 또는 외장 SSD로 폐쇄망 서비스 서버 `119.86.100.149`에 반입한다.
+* 폐쇄망 서비스 서버의 기존 미러에 차분 파일만 병합한다.
 
 ---
 
 ## 2. 운영 구조
 
-- 1차 미러링 서버: 172.30.1.118
-  - bandersnatch 실행
-  - 원본(PyPI)과 동기화
-  - 배포 원본 디렉토리 보관
-- 2차 서비스 서버(폐쇄망): 119.86.100.149
-  - 172.30.1.118에서 동기화된 데이터 수신
-  - Nginx로 내부 클라이언트 서비스
-- 내부 클라이언트
-  - `pip.conf`에서 `index-url = http://pypi.smc.com/simple` 사용
+### 2.1 1차 미러링 서버: `172.30.1.118`
 
-권장 데이터 경로:
-- 172.30.1.118: `/data/pypi/web`
-- 119.86.100.149: `/data/pypi/web`
+* Bandersnatch로 PyPI를 동기화한다.
+* 신규·변경 파일 목록을 생성한다.
+* 신규·변경 파일만 압축하여 USB에 복사한다.
+
+### 2.2 2차 서비스 서버: `119.86.100.149`
+
+* USB로 차분 배포본을 반입한다.
+* 기존 PyPI 미러에 신규·변경 파일만 병합한다.
+* Nginx를 통해 내부 클라이언트에 PyPI 서비스를 제공한다.
+
+### 2.3 내부 클라이언트 설정
+
+`pip.conf`:
+
+```ini
+[global]
+index-url = http://pypi.smc.com/simple
+trusted-host = pypi.smc.com
+```
+
+### 2.4 사용 경로
+
+#### 172.30.1.118
+
+```text
+/data/pypi/          전체 PyPI 미러
+/data/pypi/web/      실제 서비스 데이터
+/data/pypi_diff/     Bandersnatch 변경 파일 목록
+/data/pypi_delta/    차분 압축본 생성 경로
+```
+
+#### 119.86.100.149
+
+```text
+/data/pypi/web/      현재 서비스 중인 PyPI 미러
+/data/pypi_delta/    USB 반입 및 압축 해제 경로
+```
 
 ---
 
-## 3. 업데이트 정책
+## 3. 증분 배포 방식
 
-### 3.1 권장 주기
+전체 `/data/pypi/web` 디렉터리를 매번 복사하지 않는다.
 
-- 정기 미러링(172.30.1.118): 하루 2회
-  - 02:30, 14:30
-- 정기 배포(118 -> 149): 하루 2회
-  - 03:30, 15:30 (미러링 완료 후 1시간 뒤)
-- 운영 검증(149): 하루 2회
-  - 04:00, 16:00
-- 전체 점검(용량/성능/오류): 매주 1회 (일요일 05:00)
+Bandersnatch의 `diff-file` 기능을 사용하여 각 동기화에서 신규 생성되거나 변경된 파일의 경로를 기록한다.
 
-### 3.2 긴급 업데이트
+주요 변경 대상은 다음과 같다.
 
-- 보안 취약점(Critical/High) 또는 필수 패키지 배포 이슈 발생 시:
-  - 요청 후 2시간 내 임시 미러링 1회
-  - 즉시 149로 배포
-  - 대표 서버 1대에서 pip 설치 검증 후 공지
+* 새로 다운로드된 wheel 및 sdist 파일
+* 변경된 프로젝트별 Simple Index
+* 변경된 루트 Simple Index
+* 새로 생성되거나 변경된 JSON·HTML 메타데이터
+
+`diff-append-epoch = true`를 사용하면 Bandersnatch 실행마다 별도의 변경 파일 목록이 생성된다.
+
+### 배포 흐름
+
+```text
+PyPI 동기화
+  ↓
+신규·변경 파일 목록 생성
+  ↓
+오늘 생성된 변경 목록 병합
+  ↓
+변경 파일만 별도 디렉터리에 복사
+  ↓
+tar.zst 압축 및 SHA-256 생성
+  ↓
+USB 또는 외장 SSD 반입
+  ↓
+폐쇄망 기존 미러에 병합
+```
+
+### 삭제 파일 처리
+
+`diff-file`은 신규·변경 파일을 기록하며 삭제 파일을 별도로 전달하지 않는다.
+
+따라서 일상적인 증분 업데이트에서는 신규·변경 파일만 반영하고, 오래되어 사용되지 않는 파일은 분기 또는 반기 점검 시 별도로 정리한다.
 
 ---
 
-## 4. 표준 운영 절차 (SOP)
+## 4. 초기 설정
 
-### 4.1 172.30.1.118 미러링 단계
+### 4.1 Bandersnatch 설정
+
+`/etc/bandersnatch.conf`:
+
+```ini
+[mirror]
+directory = /data/pypi
+json = false
+release-files = true
+cleanup = false
+master = https://pypi.org
+timeout = 200
+global-timeout = 3600
+workers = 10
+hash-index = false
+simple-format = ALL
+stop-on-error = false
+storage-backend = filesystem
+verifiers = 3
+compare-method = hash
+
+# 신규·변경 파일 목록 저장
+diff-file = /data/pypi_diff/mirrored-files
+
+# 실행마다 별도의 목록 파일 생성
+diff-append-epoch = true
+
+[plugins]
+enabled =
+    exclude_platform
+    latest_release
+    blacklist_project
+
+[blocklist]
+platforms =
+    etc
+    py2
+    py3.1
+    py3.2
+    py3.3
+    py3.4
+    py3.5
+    py3.6
+    py3.7
+    py3.8
+
+[latest_release]
+keep = 20
+```
+
+변경 파일 목록은 다음과 같이 생성된다.
+
+```text
+/data/pypi_diff/mirrored-files-1785461400
+/data/pypi_diff/mirrored-files-1785504600
+```
+
+각 파일에는 다음과 같은 절대경로가 기록된다.
+
+```text
+/data/pypi/web/packages/ab/cd/example.whl
+/data/pypi/web/simple/setuptools/index.html
+/data/pypi/web/simple/setuptools/index.v1_json
+```
+
+### 4.2 디렉터리 생성
+
+Bandersnatch를 `super` 계정으로 실행하는 경우:
 
 ```bash
-# 사전 점검
-python3 --version
-bandersnatch --version
-df -h /data
+sudo mkdir -p \
+  /data/pypi_diff \
+  /data/pypi_delta
 
-# 미러링 실행
-bandersnatch mirror
+sudo chown -R super:super \
+  /data/pypi_diff \
+  /data/pypi_delta
 
-# 로그 확인(운영 환경에 맞게 로그 경로 지정 권장)
-# 예: /var/log/bandersnatch/mirror.log
+sudo chmod 755 \
+  /data/pypi_diff \
+  /data/pypi_delta
 ```
 
-### 4.2 172.30.1.118 -> 119.86.100.149 배포 단계
+실제 Bandersnatch 실행 계정이 다르면 `super:super`를 해당 계정과 그룹으로 변경한다.
 
-배포는 분할 압축 후 SSD 오프라인 반입 방식으로 진행한다.
+---
+
+## 5. 업데이트 정책
+
+### 5.1 정기 업데이트
+
+* 분기 1회 정기 미러링 및 폐쇄망 반입
+* 필요하면 운영 일정에 따라 추가 수행
+
+### 5.2 긴급 업데이트
+
+다음 상황에서는 정기 일정과 관계없이 즉시 증분 업데이트한다.
+
+* 보안 취약점이 발견된 경우
+* 필수 패키지의 신규 버전이 필요한 경우
+* 내부 클라이언트에서 패키지 설치 오류가 발생한 경우
+
+---
+
+## 6. 172.30.1.118 작업
+
+### 6.1 PyPI 미러링
 
 ```bash
-# 172.30.1.118에서 실행
-# 1) 배포본 생성 (tar)
-sudo tar -C /data/pypi -cpf /data/pypi_release/pypi_web_$(date +%F).tar web
-
-# 2) 분할 압축 (예: 50G 단위)
-sudo mkdir -p /data/pypi_release/split
-sudo zstd -T0 -19 /data/pypi_release/pypi_web_$(date +%F).tar -o /data/pypi_release/pypi_web_$(date +%F).tar.zst
-split -b 50G -d -a 3 /data/pypi_release/pypi_web_$(date +%F).tar.zst /data/pypi_release/split/pypi_web_$(date +%F).tar.zst.part-
-
-# 3) 체크섬 생성
-cd /data/pypi_release/split
-sha256sum pypi_web_$(date +%F).tar.zst.part-* > SHA256SUMS
-
-# 4) SSD로 복사 (SSD 마운트 경로는 환경에 맞게 변경)
-sudo rsync -avh --progress /data/pypi_release/split/ /mnt/ssd/pypi_release/
+sudo bandersnatch mirror
 ```
 
-옵션 설명:
-- `split -b 50G`: 파일을 50GB 단위로 분할
-- `sha256sum`: 반입 전/후 파일 무결성 검증
-- `zstd -19`: 압축률 우선(속도보다 용량 절감 중점)
+미러링이 완료되면 `/data/pypi_diff/`에 `mirrored-files-<epoch>` 형식의 변경 목록이 생성된다.
 
-### 4.3 119.86.100.149 서비스 반영 단계
+생성 여부를 확인한다.
 
 ```bash
-# 1) SSD에서 배포 파일 복사
-sudo mkdir -p /data/pypi_release/incoming
-sudo rsync -avh /mnt/ssd/pypi_release/ /data/pypi_release/incoming/
-
-# 2) 체크섬 검증
-cd /data/pypi_release/incoming
-sha256sum -c SHA256SUMS
-
-# 3) 분할 파일 병합 및 복원
-cat pypi_web_*.tar.zst.part-* > pypi_web_restore.tar.zst
-sudo zstd -d -T0 pypi_web_restore.tar.zst -o pypi_web_restore.tar
-
-# 4) 서비스 데이터 교체
-sudo mkdir -p /data/pypi/web_new
-sudo tar -C /data/pypi -xpf pypi_web_restore.tar
-
-# Nginx 설정 검증
-sudo nginx -t
-
-# Nginx reload
-sudo systemctl reload nginx
-
-# 서비스 확인
-curl -I http://pypi.smc.com/simple/
+ls -lh /data/pypi_diff/mirrored-files-*
 ```
 
-### 4.4 클라이언트 검증 단계
+---
 
-대표 클라이언트 1~2대에서 검증:
+### 6.2 오늘 변경된 파일 압축
+
+아래 명령 전체를 한 번에 실행한다.
 
 ```bash
-pip install --index-url http://pypi.smc.com/simple --trusted-host pypi.smc.com numpy==1.26.4
-pip install --index-url http://pypi.smc.com/simple --trusted-host pypi.smc.com pandas==2.2.2
+set -e
+
+TODAY=$(date +%F)
+TOMORROW=$(date -d "$TODAY +1 day" +%F)
+
+DELTA_DIR="/data/pypi_delta"
+UPDATE_DIR="${DELTA_DIR}/update"
+LIST_FILE="${DELTA_DIR}/changed_files.txt"
+ARCHIVE="${DELTA_DIR}/pypi_delta_${TODAY}.tar.zst"
+CHECKSUM="${DELTA_DIR}/pypi_delta_${TODAY}.sha256"
+
+# 이전 작업 파일 삭제
+sudo rm -rf "$UPDATE_DIR"
+sudo rm -f "$LIST_FILE" "$ARCHIVE" "$CHECKSUM"
+sudo mkdir -p "$UPDATE_DIR"
+
+# 오늘 생성된 모든 변경 목록을 합치고 중복 제거
+sudo find /data/pypi_diff \
+  -maxdepth 1 \
+  -type f \
+  -name 'mirrored-files-*' \
+  -newermt "${TODAY} 00:00:00" \
+  ! -newermt "${TOMORROW} 00:00:00" \
+  -exec cat {} + \
+  | grep '^/data/pypi/web/' \
+  | sort -u \
+  | sed 's#^/data/pypi/web/##' \
+  | sudo tee "$LIST_FILE" > /dev/null
+
+# 변경 파일이 없는 경우 중단
+if [ ! -s "$LIST_FILE" ]; then
+    echo "오늘 변경된 파일이 없습니다."
+    exit 1
+fi
+
+# 변경된 파일만 원래 디렉터리 구조를 유지하여 복사
+sudo rsync -a \
+  --files-from="$LIST_FILE" \
+  /data/pypi/web/ \
+  "$UPDATE_DIR/"
+
+# 변경 파일 목록도 압축본에 포함
+sudo cp "$LIST_FILE" "$UPDATE_DIR/CHANGED_FILES.txt"
+
+# 차분 파일 압축
+sudo tar -C "$DELTA_DIR" \
+  -I 'zstd -6 -T0' \
+  -cf "$ARCHIVE" \
+  update
+
+# 체크섬 생성
+cd "$DELTA_DIR"
+sudo sha256sum "$(basename "$ARCHIVE")" \
+  | sudo tee "$(basename "$CHECKSUM")" > /dev/null
+
+# 결과 확인
+sudo zstd -t "$ARCHIVE"
+sudo sha256sum -c "$CHECKSUM"
+
+echo
+echo "변경 파일 수: $(wc -l < "$LIST_FILE")"
+sudo du -sh "$UPDATE_DIR" "$ARCHIVE"
+ls -lh "$ARCHIVE" "$CHECKSUM"
+```
+
+생성되는 파일은 다음 두 개이다.
+
+```text
+/data/pypi_delta/pypi_delta_YYYY-MM-DD.tar.zst
+/data/pypi_delta/pypi_delta_YYYY-MM-DD.sha256
 ```
 
 ---
 
-## 5. 자동화 구성안
+### 6.3 USB 또는 외장 SSD에 복사
 
-### 5.1 172.30.1.118 크론 예시
+USB 마운트 경로를 `/mnt/usb`로 가정한다.
 
-`/etc/cron.d/pypi-mirror`
+```bash
+TODAY=$(date +%F)
 
-```cron
-# 하루 2회 미러링
-30 2,14 * * * root /usr/bin/bandersnatch mirror >> /var/log/bandersnatch/mirror.log 2>&1
+sudo mkdir -p "/mnt/usb/pypi_delta_${TODAY}"
 
-# 미러링 완료 후 1시간 뒤 SSD 반입용 배포본 생성
-30 3,15 * * * root /bin/bash -lc 'mkdir -p /data/pypi_release /data/pypi_release/split && tar -C /data/pypi -cpf /data/pypi_release/pypi_web_$(date +\%F).tar web && zstd -T0 -19 /data/pypi_release/pypi_web_$(date +\%F).tar -o /data/pypi_release/pypi_web_$(date +\%F).tar.zst && split -b 50G -d -a 3 /data/pypi_release/pypi_web_$(date +\%F).tar.zst /data/pypi_release/split/pypi_web_$(date +\%F).tar.zst.part- && cd /data/pypi_release/split && sha256sum pypi_web_$(date +\%F).tar.zst.part-* > SHA256SUMS' >> /var/log/bandersnatch/release.log 2>&1
+sudo rsync -avh --progress \
+  "/data/pypi_delta/pypi_delta_${TODAY}.tar.zst" \
+  "/data/pypi_delta/pypi_delta_${TODAY}.sha256" \
+  "/mnt/usb/pypi_delta_${TODAY}/"
 ```
 
-### 5.2 로그 로테이션 권장
+USB에 복사된 파일의 체크섬을 확인한다.
 
-- `/var/log/bandersnatch/mirror.log`
-- `/var/log/bandersnatch/release.log`
+```bash
+TODAY=$(date +%F)
 
-월 1회 또는 주 1회 `logrotate` 적용 권장.
+cd "/mnt/usb/pypi_delta_${TODAY}"
+sha256sum -c "pypi_delta_${TODAY}.sha256"
+```
 
----
+복사가 완료되면 디스크 쓰기를 완료하고 마운트를 해제한다.
 
-## 6. 모니터링 및 알림 기준
-
-### 6.1 알림 조건
-
-- `/data` 사용률 80% 이상: 경고
-- `/data` 사용률 90% 이상: 긴급
-- 미러링 실패(종료코드 != 0): 즉시 알림
-- 분할 압축/체크섬 생성 실패(종료코드 != 0): 즉시 알림
-- 149 Nginx `5xx` 급증: 경고
-
-### 6.2 필수 점검 지표
-
-- 미러링 소요 시간
-- 배포본 크기(압축 전/후)
-- 최근 24시간 설치 실패 건수(가능 시)
+```bash
+sync
+sudo umount /mnt/usb
+```
 
 ---
 
-## 7. 장애 대응
+## 7. 119.86.100.149 서비스 반영
 
-### 7.1 미러링 실패 (172.30.1.118)
+USB를 `/mnt/usb`에 마운트했다고 가정한다.
 
-1. `bandersnatch.conf` 문법/경로 확인
-2. 디스크 여유 확인
-3. 네트워크 연결 확인 후 재실행
-4. 반복 실패 시 직전 정상 데이터 유지 + 운영 공지
+반입한 배포 날짜를 지정한다.
 
-### 7.2 배포 실패 (118 -> 149)
+```bash
+RELEASE_DATE=YYYY-MM-DD
+```
 
-1. SSD 파일 체크섬 검증 결과 확인
-2. 손상 파일만 재복사 후 재검증
-3. 실패 지속 시 149 기존 데이터로 서비스 유지
-4. 원인 해소 후 수동 배포
+예:
 
-### 7.3 서비스 오류 (149)
+```bash
+RELEASE_DATE=2026-07-31
+```
 
-1. `sudo nginx -t` 점검
-2. `sudo journalctl -u nginx -n 200` 확인
-3. 필요 시 직전 백업으로 롤백
+### 7.1 차분 파일 복사 및 검증
 
----
+```bash
+set -e
 
-## 8. 변경 관리
+RELEASE_DATE=YYYY-MM-DD
+DELTA_DIR="/data/pypi_delta"
 
-- `bandersnatch.conf` 변경 시 사전 영향 검토
-  - 용량 증가량
-  - 제외/허용 플랫폼 변경 영향
-- 변경 후 필수 검증
-  - `pip index` 접근
-  - 대표 패키지 설치
-- 변경 이력은 월간 운영 기록으로 관리
+sudo rm -rf "$DELTA_DIR"
+sudo mkdir -p "$DELTA_DIR"
 
----
+sudo rsync -avh --progress \
+  "/mnt/usb/pypi_delta_${RELEASE_DATE}/" \
+  "$DELTA_DIR/"
 
-## 9. 권장 운영 일정표
+cd "$DELTA_DIR"
+sudo sha256sum -c "pypi_delta_${RELEASE_DATE}.sha256"
+```
 
-- 매일 02:30: 172.30.1.118 미러링
-- 매일 03:30: 119.86.100.149로 배포
-- 매일 04:00: 대표 클라이언트 설치 검증
-- 매일 14:30/15:30/16:00: 동일 절차 1회 추가
-- 매주 일요일 05:00: 용량/성능/오류 종합 점검
+체크섬 검증에 실패하면 서비스에 반영하지 않는다.
 
 ---
 
-## 10. 초기 도입 체크리스트
+### 7.2 압축 해제 및 기존 미러에 병합
 
-- [ ] 172.30.1.118에서 bandersnatch 수동 동작 확인
-- [ ] 118에서 분할 압축/체크섬 생성 확인
-- [ ] SSD 반입 후 149에서 체크섬 검증 및 복원 확인
-- [ ] 119.86.100.149 Nginx 설정/서비스 상태 정상
-- [ ] 내부 클라이언트 pip.conf/hosts 반영 확인
-- [ ] 대표 패키지 설치 테스트 성공
-- [ ] 크론 등록 및 로그/알림 연동 완료
+```bash
+set -e
+
+RELEASE_DATE=YYYY-MM-DD
+DELTA_DIR="/data/pypi_delta"
+
+cd "$DELTA_DIR"
+
+sudo tar \
+  -I zstd \
+  -xf "pypi_delta_${RELEASE_DATE}.tar.zst"
+
+sudo rsync -av \
+  --delay-updates \
+  "${DELTA_DIR}/update/" \
+  /data/pypi/web/
+```
+
+Nginx 설정 변경은 없으므로 일반적으로 reload할 필요는 없다.
+
+서비스 접근 여부를 확인한다.
+
+```bash
+curl -fsSI http://pypi.smc.com/simple/
+```
+
+정상이라면 `HTTP/1.1 200 OK` 또는 `HTTP/2 200` 응답이 표시된다.
+
+---
+
+## 8. 클라이언트 검증
+
+대표 클라이언트에서 추가된 패키지가 조회되고 다운로드되는지 확인한다.
+
+### 8.1 setuptools 버전 조회
+
+```bash
+python3 -m pip index versions setuptools \
+  --index-url http://pypi.smc.com/simple \
+  --trusted-host pypi.smc.com
+```
+
+### 8.2 setuptools 다운로드 확인
+
+```bash
+rm -rf /tmp/pypi-test
+mkdir -p /tmp/pypi-test
+
+python3 -m pip download \
+  --no-deps \
+  --index-url http://pypi.smc.com/simple \
+  --trusted-host pypi.smc.com \
+  --dest /tmp/pypi-test \
+  setuptools
+
+ls -lh /tmp/pypi-test
+```
+
+추가된 최신 setuptools 파일이 정상적으로 다운로드되면 증분 업데이트가 완료된 것이다.
+
+다른 패키지를 검증할 때는 명령의 `setuptools`를 해당 패키지명으로 변경한다.
+
+검증 후 임시 파일을 삭제한다.
+
+```bash
+rm -rf /tmp/pypi-test
+```
